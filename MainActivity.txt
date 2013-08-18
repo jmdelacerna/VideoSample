@@ -1,0 +1,428 @@
+package com.example.videorecordingsheet;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.LinkedList;
+import java.util.List;
+
+import android.app.Activity;
+import android.hardware.Camera;
+import android.hardware.Camera.Parameters;
+import android.media.CamcorderProfile;
+import android.media.MediaRecorder;
+import android.os.AsyncTask;
+import android.os.Bundle;
+import android.os.Environment;
+import android.os.SystemClock;
+import android.util.Log;
+import android.view.MotionEvent;
+import android.view.Surface;
+import android.view.SurfaceHolder;
+import android.view.SurfaceView;
+import android.view.View;
+import android.view.View.OnClickListener;
+import android.widget.Button;
+import android.widget.ProgressBar;
+import android.widget.Toast;
+
+import com.coremedia.iso.IsoFile;
+import com.googlecode.mp4parser.authoring.Movie;
+import com.googlecode.mp4parser.authoring.Track;
+import com.googlecode.mp4parser.authoring.builder.DefaultMp4Builder;
+import com.googlecode.mp4parser.authoring.container.mp4.MovieCreator;
+import com.googlecode.mp4parser.authoring.tracks.AppendTrack;
+
+public class MainActivity extends Activity implements SurfaceHolder.Callback {
+
+	String filename;
+	ArrayList<String> filesToAppend = new ArrayList<String>();
+	long Time;
+    @Override
+    protected void onDestroy() {
+        stopRecording();
+        super.onDestroy();
+ 
+    }
+
+    private SurfaceHolder surfaceHolder;
+    private SurfaceView surfaceView;
+    public MediaRecorder mrec = new MediaRecorder();    
+    private Camera mCamera;
+    public ProgressBar pb;
+    boolean mPreviewRunning = false;
+    Button a;
+
+    
+    
+    public class BackgroundAsyncTask extends AsyncTask<Void, Integer, Void> {
+  
+    	int myProgress;
+    	@Override
+    	protected void onPostExecute(Void result) {
+    		// TODO Auto-generated method stub
+		   Toast.makeText(MainActivity.this,
+		         "onPostExecute", Toast.LENGTH_LONG).show();
+		  }
+		
+		  @Override
+		protected void onPreExecute() {
+		   // TODO Auto-generated method stub
+		   Toast.makeText(MainActivity.this,
+		         "onPreExecute", Toast.LENGTH_LONG).show();
+		   myProgress = 0;
+		 }
+
+		  @Override
+		protected Void doInBackground(Void... params) {
+			  // TODO Auto-generated method stub
+			while(myProgress!=(int)(Time/1000)){
+			myProgress++;
+			publishProgress(myProgress);
+			SystemClock.sleep(100);
+			}
+			return null;
+		  }
+
+		  @Override
+		protected void onProgressUpdate(Integer... values) {
+			  // TODO Auto-generated method stub
+			  pb.setProgress(values[0]);
+		  }
+    }
+    
+    
+   
+    @SuppressWarnings("deprecation")
+	@Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        pb = (ProgressBar) findViewById(R.id.progressBar1);
+        pb.setMax(200);
+        pb.setProgress(0);
+        surfaceView = (SurfaceView) findViewById(R.id.surface_camera);
+        mCamera = Camera.open();
+        Camera.Parameters parameters = mCamera.getParameters();
+        parameters.setRecordingHint(true);
+        parameters.setFocusMode(Camera.Parameters.FOCUS_MODE_AUTO);
+       mCamera.setParameters(parameters);
+        setCameraDisplayOrientation(this,1,mCamera);
+        
+        surfaceHolder = surfaceView.getHolder();
+        surfaceHolder.addCallback(this);
+        surfaceHolder.setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS);
+        a = (Button) findViewById(R.id.button1);
+        a.setOnClickListener(new OnClickListener(){
+        	public void onClick(View view)
+        	{
+        		//increment();
+        		try{
+        		join();}
+        		catch(Exception e)
+        		{Log.i(null, "Error join");}
+        	}
+        });
+                
+    }
+
+    
+
+    protected void startRecording() throws IOException
+    {
+        if(mCamera==null)
+            mCamera = Camera.open();
+        Camera.Parameters parameters = mCamera.getParameters();
+        parameters.setRecordingHint(true);
+        parameters.setFocusMode(Camera.Parameters.FOCUS_MODE_AUTO);
+       mCamera.setParameters(parameters);
+        // String filename;
+         String path;
+        
+         path= Environment.getExternalStorageDirectory().getAbsolutePath().toString();
+         
+         Date date=new Date();
+         filename ="/rec"+date.toString().replace(" ", "_").replace(":", "_")+".mp4";
+         filesToAppend.add(filename);
+         //create empty file it must use
+         File file=new File(path,filename);
+         
+        mrec = new MediaRecorder(); 
+        mCamera.lock();
+        mCamera.unlock();
+        // Please maintain sequence of following code. 
+
+         // If you change sequence it will not work.
+        
+        mrec.setCamera(mCamera); 
+        
+        
+        mrec.setAudioSource(MediaRecorder.AudioSource.MIC);
+        mrec.setVideoSource(MediaRecorder.VideoSource.CAMERA);
+
+        CamcorderProfile cpHigh = CamcorderProfile.get(CamcorderProfile.QUALITY_HIGH);
+        mrec.setProfile(cpHigh);
+        mrec.setMaxDuration(10000); // 50 seconds
+        mrec.setMaxFileSize(5000000); // Approximately 5 megabytes
+        mrec.setOrientationHint(90);
+        
+       /* mrec.setVideoSource(MediaRecorder.VideoSource.DEFAULT);
+        mrec.setAudioSource(MediaRecorder.AudioSource.MIC);*/
+        
+           /* mrec.setVideoSize(640, 480);
+			mrec.setVideoFrameRate(30); //might be auto-determined due to lighting
+			mrec.setVideoEncodingBitRate(500);
+			mrec.setAudioEncodingBitRate(128);
+			mrec.setVideoEncoder(MediaRecorder.VideoEncoder.H264);// MPEG_4_SP
+			mrec.setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB);*/
+		
+        
+       // mrec.setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP); //THREE_GPP //MPEG_4
+        //mrec.setVideoEncoder(MediaRecorder.VideoEncoder.MPEG_4_SP); //H263 //MPEG_4_SP
+       // mrec.setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB); //AMR_NB */
+        mrec.setPreviewDisplay(surfaceHolder.getSurface());
+        mrec.setOutputFile(path+filename);
+        mrec.prepare();
+        mrec.start();
+
+        
+    }
+
+    protected void stopRecording() {
+
+        if(mrec!=null)
+        {
+            mrec.stop();
+            mrec.release();
+            mCamera.release();
+            mCamera.lock();
+        }
+        
+    }
+
+    private void releaseMediaRecorder() {
+
+        if (mrec != null) {
+            mrec.reset(); // clear recorder configuration
+            mrec.release(); // release the recorder object
+        }
+    }
+
+    private void releaseCamera() {
+        if (mCamera != null) {
+            mCamera.release(); // release the camera for other applications
+            mCamera = null;
+        }
+
+    }
+
+    @Override
+    public void surfaceChanged(SurfaceHolder holder, int format, int width,int height) {      
+    	
+    	if (mPreviewRunning) {
+
+    		mCamera.stopPreview();
+
+    		}
+
+    		Camera.Parameters p = mCamera.getParameters();
+
+    		p.setPreviewSize(width, height);
+
+    		try {
+
+    		mCamera.setPreviewDisplay(holder);
+
+    		} catch (IOException e) {
+
+    		e.printStackTrace();
+
+    		}
+
+    		mCamera.startPreview();
+
+    		mPreviewRunning = true;
+
+    }
+
+    @Override
+    public void surfaceCreated(SurfaceHolder holder) {       
+
+        if (mCamera != null) {
+            Parameters params = mCamera.getParameters();
+            mCamera.setParameters(params);
+            Log.i("Surface", "Created");
+        }
+        else {
+            Toast.makeText(getApplicationContext(), "Camera not available!",
+                    Toast.LENGTH_LONG).show();
+
+            finish();
+        }
+
+    }
+
+    @Override
+    public void surfaceDestroyed(SurfaceHolder holder) {
+        mCamera.stopPreview();
+        mCamera.release();       
+
+    }
+    
+    public static void setCameraDisplayOrientation(Activity activity,
+            int cameraId, android.hardware.Camera camera) {
+        android.hardware.Camera.CameraInfo info =
+                new android.hardware.Camera.CameraInfo();
+        android.hardware.Camera.getCameraInfo(cameraId, info);
+        int rotation = activity.getWindowManager().getDefaultDisplay()
+                .getRotation();
+        int degrees = 0;
+        switch (rotation) {
+            case Surface.ROTATION_0: degrees = 0; break;
+            case Surface.ROTATION_90: degrees = 90; break;
+            case Surface.ROTATION_180: degrees = 180; break;
+            case Surface.ROTATION_270: degrees = 270; break;
+        }
+
+        int result;
+        if (info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
+            result = (info.orientation + degrees) % 360;
+            result = (360 - result) % 360;  // compensate the mirror
+        } else {  // back-facing
+            result = (info.orientation - degrees + 360) % 360;
+        }
+        camera.setDisplayOrientation(result);
+    }
+    
+    
+    public boolean onTouchEvent(MotionEvent event) {
+        boolean ok = false; 
+        boolean isReleased = event.getAction() == MotionEvent.ACTION_UP || event.getAction() == MotionEvent.ACTION_CANCEL;
+        boolean isPressed = event.getAction() == MotionEvent.ACTION_DOWN;
+        Time = event.getEventTime();
+        
+        if (isPressed) {
+            ok = true;
+            //Toast.makeText(getApplicationContext(), "HOIHOIHOI", Toast.LENGTH_SHORT).show();
+            try{
+            	
+            startRecording();
+            new BackgroundAsyncTask().execute();
+            } catch (Exception e) {
+            
+            String message = e.getMessage();
+            Log.i(null, "Problem " + message);
+            mrec.release();
+            
+            }
+            Toast.makeText(this, String.valueOf(event.getDownTime()), Toast.LENGTH_LONG).show();
+           
+        } else if (isReleased) {
+        	 Toast.makeText(getApplicationContext(), String.valueOf((int)((event.getEventTime()-event.getDownTime())/1000)), Toast.LENGTH_SHORT).show();
+        	
+        	 mrec.stop();
+             mrec.release();
+             mrec = null;
+
+             
+             
+           
+             
+           
+        }
+    	
+    	
+
+        return ok;
+     }
+   
+    public void increment(long incr) {
+    
+        int progress = 1;
+       // pb.setProgress(progress+pb.getProgress());
+        pb.incrementProgressBy((int)(incr/1000));
+        Toast.makeText(this, String.valueOf(pb.getProgress()), Toast.LENGTH_LONG).show();
+    }
+    
+    
+    public void join() throws Exception
+    {  
+        ArrayList<File> filesAppending = new ArrayList<File>();
+        ArrayList<FileInputStream> fileInputStream = new ArrayList<FileInputStream>();
+    	for(int i=0;i<filesToAppend.size();i++)
+    	{
+    		filesAppending.add(new File(Environment.getExternalStorageDirectory().getAbsolutePath().toString() + File.separator + filesToAppend.get(i).toString()));
+    	}
+        
+       // File fileOne = new File(Environment.getExternalStorageDirectory().getAbsolutePath().toString() + File.separator +"recThu_Jul_18_15_38_14_GMT+08_00_2013.mp4");
+       // File fileTwo = new File(Environment.getExternalStorageDirectory().getAbsolutePath().toString() + File.separator +"recThu_Jul_18_15_38_22_GMT+08_00_2013.mp4");
+        
+    	for(int i=0;i<filesAppending.size();i++)
+    	{
+    	fileInputStream.add(new FileInputStream(filesAppending.get(i)));
+    	}
+    	//FileInputStream fisOne = new FileInputStream(fileOne);
+        //FileInputStream fisTwo = new FileInputStream(fileTwo);      
+        
+        ArrayList<Movie> inMovies = new ArrayList<Movie>();
+        for(int i=0;i<fileInputStream.size();i++)
+        {
+        inMovies.add(MovieCreator.build(new FileInputStream(filesAppending.get(i)).getChannel()));
+        }
+        /*Movie[] inMovies = new Movie[]{
+                MovieCreator.build(new FileInputStream(fileOne).getChannel()),
+                MovieCreator.build(new FileInputStream(fileTwo).getChannel())};
+        */
+
+        List<Track> videoTracks = new LinkedList<Track>();
+        List<Track> audioTracks = new LinkedList<Track>();
+        
+        for (Movie m : inMovies) {
+            for (Track t : m.getTracks()) {
+                if (t.getHandler().equals("soun")) {
+                    audioTracks.add(t);
+                }
+                if (t.getHandler().equals("vide")) {
+                    videoTracks.add(t);
+                }
+            }
+        }
+
+        Movie result = new Movie();
+        
+        
+        if (audioTracks.size() > 0) {
+            result.addTrack(new AppendTrack(audioTracks.toArray(new Track[audioTracks.size()])));
+        }
+        if (videoTracks.size() > 0) {
+            result.addTrack(new AppendTrack(videoTracks.toArray(new Track[videoTracks.size()])));
+        }
+
+        int counterFileNumber = 0;
+        while(new File(Environment.getExternalStorageDirectory().getAbsolutePath().toString() + File.separator +"VID_TO_TUTFIN_"+ counterFileNumber + ".mp4").exists()){
+            counterFileNumber++;
+        }
+
+        IsoFile out = new DefaultMp4Builder().build(result);
+        String outputFileNameString = Environment.getExternalStorageDirectory().getAbsolutePath().toString() + File.separator +"VID_TO_TUTFIN_"+ counterFileNumber + ".mp4";
+        FileOutputStream fos = new FileOutputStream(new File(String.format(outputFileNameString)));
+        
+        for(int i=0;i<filesAppending.size();i++)
+        {
+        File file = new File(filesAppending.get(i).toString());
+        boolean deleted = file.delete();
+        }
+        out.getBox(fos.getChannel());
+        fos.close();
+        
+       
+    }
+    
+    
+    
+    
+}
+
